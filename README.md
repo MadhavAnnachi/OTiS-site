@@ -18,9 +18,14 @@ git add -A && git commit -m "Sync site" && git push   # Vercel redeploys on push
 This is a plain static site with no build step and no server code.
 
 - `index.html` contains `<meta name="otis-deploy" content="static">`.
-- That tag tells `app.js` never to call the Python API.
-- The classical planners (exact KKT optimum, convex solver, E-guidance) therefore run in the browser through `plant.js`.
-- The trained neural planner and the Training tab need the GPU server (`python main.py` in the OTiS repo). They show a short note explaining this.
+- With that tag, `app.js` sends every `/api/*` call to `demo.js`, which answers in the browser.
+
+| File | What it holds |
+| --- | --- |
+| `demo/<vehicle>.bin` | The trained network for each preset vehicle (small, 584K parameters, float32). It runs in the browser in under 1 ms. |
+| `demo/<vehicle>.json` | A training run recorded on an NVIDIA RTX 5070 Ti. The Training tab replays it as "simulated training", at its recorded speed. |
+
+The classical planners (exact KKT optimum and E-guidance) come from `plant.js`. If a visitor edits the parameters away from a preset, only the classical planners run.
 
 ## Vercel settings
 

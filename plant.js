@@ -5,7 +5,6 @@
 (() => {
   "use strict";
   const N = 50;
-  const HOSTED = document.querySelector('meta[name="otis-deploy"]')?.content === "static";
   // Legacy stiffness-domain guard, same admission rule as otis/config.py.
   // Exact point-mass propagation below no longer needs RK4 sub-steps.
   const MAX_DECAY = 0.5, MAX_SUB = 64;
@@ -232,9 +231,7 @@
     return {
       x0, goal, plans, optimal_loss: optimal,
       spec: { params: spec.params, horizon: spec.horizon, dt: spec.dt, workspace: spec.workspace, start_speed: spec.start_speed, lambda_fuel: spec.lambda_fuel, signature: spec.signature, derived: spec.derived, clamped: spec.clamped },
-      neural_status: { available: false, trainable: false, reason: HOSTED
-        ? "The trained networks run on the OTiS GPU server. This web demo runs the classical planners in your browser: the exact convex optimum and E-guidance."
-        : "The network needs the Python server (python main.py). This static copy runs the classical planners in your browser." },
+      neural_status: { available: false, trainable: false, reason: "The network needs the Python server (python main.py). This static copy runs the classical planners in your browser." },
     };
   }
 
@@ -244,5 +241,6 @@
     get catalog() { return CATALOG; },
     resolve: (id, o) => resolve(id, o),
     planLocal,
+    score: (u, x0, goal, spec) => score(u, x0, goal, spec),
   };
 })();

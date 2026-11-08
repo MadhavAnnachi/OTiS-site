@@ -19,7 +19,11 @@
     return v.toFixed(0);
   };
   const fmtParams = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(0) + "K" : String(n));
+  // Set by build_site.py on the hosted copy: api() is answered in the browser
+  // by demo.js (recorded GPU runs + the trained networks), not by Python.
+  const WEB_DEMO = document.querySelector('meta[name="otis-deploy"]')?.content === "static";
   const api = async (path, body) => {
+    if (WEB_DEMO && window.OTiSDemo) return window.OTiSDemo.api(path, body);
     const opt = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
     const r = await fetch(path, opt);
     let data = {};
@@ -31,14 +35,14 @@
     }
     return data;
   };
-  // Set by build_site.py on the hosted copy: never contact the Python server.
-  const WEB_DEMO = document.querySelector('meta[name="otis-deploy"]')?.content === "static";
-  const TRAIN_OFFLINE = WEB_DEMO
-    ? "Training runs on the OTiS GPU server and is not part of this web demo."
-    : "Training needs the Python server: run python main.py";
+  const TRAIN_OFFLINE = "Training needs the Python server: run python main.py";
   if (WEB_DEMO) {
-    const hero = $("#sim-hero");
-    if (hero) hero.textContent = "Enter your vehicle and mission, or drag the start, velocity and goal. Every planner solves the same problem in the plant your numbers define.";
+    // Say plainly on the Training tab that this run is a replay.
+    const row = $("#btn-train")?.closest(".row");
+    if (row) row.insertAdjacentHTML("afterend", `<div class="row col"><div class="note info" id="demo-note">Simulated training on an NVIDIA RTX 5070 Ti: pressing Train replays a real run recorded on that GPU for the selected vehicle, at its recorded speed. The trained network then runs in your browser.</div></div>`);
+    // The step count is fixed by each recorded run, so hide the slider.
+    const steps = $("#steps");
+    if (steps) { steps.disabled = true; [steps.closest(".row"), $("#steps-val")?.closest(".row")].forEach((r) => { if (r) r.style.display = "none"; }); }
   }
   let toastTimer;
   const toast = (msg) => {
@@ -831,7 +835,9 @@
     }
     if (!res.ok) return toast(res.message || "Could not start training");
     S.snapshots = []; S.evoLive = true; S.evoIndex = -1;
-    toast(`Training ${S.size} model on the ${currentVehicle().name} · ${(+stepsEl.value).toLocaleString()} steps`);
+    toast(WEB_DEMO
+      ? `Simulated training · ${currentVehicle().name} · replaying the RTX 5070 Ti run`
+      : `Training ${S.size} model on the ${currentVehicle().name} · ${(+stepsEl.value).toLocaleString()} steps`);
   }
   $("#btn-train").addEventListener("click", startTraining);
   $("#btn-pause").addEventListener("click", async () => {
@@ -867,7 +873,6 @@
   let lastPhase = null, lastVersion = -1, pollDelay = 400;
   async function poll() {
     try {
-      if (WEB_DEMO) throw new Error("hosted web demo: no server");
       const st = await api("/api/state");
       S.server = st;
       const firstLoad = !S.cfg.sizes || !Object.keys(S.cfg.sizes).length;
@@ -907,7 +912,6 @@
         requestPlan(true);
       }
       updateStatus(null);
-      if (WEB_DEMO) return;  // nothing to reconnect to
       pollDelay = 4000;
     }
     setTimeout(poll, pollDelay);
@@ -919,11 +923,6 @@
     if (!st) {
       tx.textContent = S.staticMode ? (WEB_DEMO ? "Web demo" : "Static demo") : "Server offline";
       el.classList.add(S.staticMode ? "ready" : "warn");
-      if (WEB_DEMO) {
-        renderLog(null);
-        ["#btn-train", "#btn-pause", "#btn-stop"].forEach((id) => { $(id).disabled = true; });
-        $("#train-badge").textContent = "Training runs on the GPU server";
-      }
       return;
     }
     const dev = (st.config?.device || "").toLowerCase().includes("cuda") ? "GPU" : "CPU";
@@ -933,8 +932,8 @@
     const map = {
       idle: ["warn", `Ready · ${net}`],
       pretrained: ["ready", `Ready · ${net}`],
-      compiling: ["live", `Compiling · ${dev}`],
-      training: ["live", `Training on ${dev}`],
+      compiling: ["live", WEB_DEMO ? "Simulated training · compiling" : `Compiling · ${dev}`],
+      training: ["live", WEB_DEMO ? "Simulated training · RTX 5070 Ti" : `Training on ${dev}`],
       paused: ["warn", "Training paused"],
       done: ["ready", `Ready · ${net}`],
       error: ["warn", "Training error · see terminal"],
@@ -942,7 +941,9 @@
     let [cls, text] = map[st.phase] || ["", st.phase];
     if (S.planError && !["compiling", "training", "paused"].includes(st.phase)) { cls = "warn"; text = "Planner error · see Parameters"; }
     el.classList.add(cls); tx.textContent = text;
-    el.title = `Selected plant: ${net}. Plans use frozen weights on the CPU (about 1 ms); training runs on the ${dev} (${st.config?.device || "?"}).`;
+    el.title = WEB_DEMO
+      ? `Selected plant: ${net}. The network runs in your browser from its trained weights. Training is simulated: it replays a real run recorded on an ${st.config?.device || "GPU"}.`
+      : `Selected plant: ${net}. Plans use frozen weights on the CPU (about 1 ms); training runs on the ${dev} (${st.config?.device || "?"}).`;
 
     const training = ["training", "compiling", "paused"].includes(st.phase);
     $("#btn-train").disabled = training || currentVehicle().kind !== "point_mass";
@@ -1175,7 +1176,7 @@
     const st = S.neural;
     const training = ["training", "compiling", "paused"].includes(S.server?.phase);
     const trainingThis = training && S.server?.plant?.signature && S.server.plant.signature === S.spec?.signature;
-    let cls = "off", title = WEB_DEMO ? "Network not in the web demo" : "No network for these parameters", body = "", action = "";
+    let cls = "off", title = "No network for these parameters", body = "", action = "";
     if (S.planError) { title = "Current parameters not validated"; body = "<p>Planning failed for the current fields. Retained plans are from the last valid request, not evidence of a matching trained network.</p>"; }
     else if (!st) { body = "<p>Waiting for the planner…</p>"; }
     else if (trainingThis) {
@@ -1227,7 +1228,7 @@
     const lastLine = !training && last?.name && ["done", "error"].includes(S.server?.phase)
       ? `<div class="note info">The map, progress and log show the <b>last run</b>: ${esc(last.name)}${S.server.n_params || S.server.model?.n_params ? " · " + fmtParams(S.server.n_params || S.server.model.n_params) + " parameters" : ""}${S.server.best_step != null ? " · best step " + Number(S.server.best_step).toLocaleString() : ""}${last.signature !== S.spec?.signature ? ", not the plant above" : ""}.</div>` : "";
     box.innerHTML = `<div class="row"><span class="grow">${esc(tp.name)}</span><span class="muted">${training ? "this run" : "next run"}</span></div><div class="plant-summary">${chips}</div>${note || lastLine ? `<div class="notes">${note}${lastLine}</div>` : ""}`;
-    $("#btn-train").disabled = training || kind !== "point_mass" || WEB_DEMO;
+    $("#btn-train").disabled = training || kind !== "point_mass";
   }
 
   // reset / export / import

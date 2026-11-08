@@ -1,0 +1,38 @@
+{
+  "defaults": {
+    "size": "small",
+    "steps": 20000,
+    "lr": 0.0006,
+    "lambda_fuel": 0.01,
+    "batch_size": 1024,
+    "seed": 0,
+    "position_limit": 2.0,
+    "velocity_limit": 0.5
+  },
+  "runs": {
+    "rocket": {
+      "signature": "pm:1,0,0,4,0.01",
+      "best_step": 19700,
+      "val_distance": 0.01508745364844799,
+      "train_seconds": 112.63725850300003,
+      "frames": 452,
+      "snapshots": 194
+    },
+    "uav": {
+      "signature": "pm:20,9.81,0.2,4,0.1",
+      "best_step": 8000,
+      "val_distance": 0.02707548439502716,
+      "train_seconds": 46.02092100599839,
+      "frames": 186,
+      "snapshots": 200
+    },
+    "usv": {
+      "signature": "pm:2,0,0.75,25,0.1",
+      "best_step": 19950,
+      "val_distance": 0.05511581152677536,
+      "train_seconds": 112.33866608399998,
+      "frames": 451,
+      "snapshots": 194
+    }
+  }
+}
